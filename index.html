@@ -743,7 +743,7 @@
   </footer>
 
   <!-- BARRA FIJA INFERIOR EN MÓVIL (Fixed Mobile Bottom Bar) -->
-  <aside class="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-200 px-4 py-3 shadow-[0_-8px_20px_rgba(0,0,0,0.12)]">
+  <aside class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-gray-200 px-4 py-3 shadow-[0_-8px_20px_rgba(0,0,0,0.12)]">
     <div class="grid grid-cols-2 gap-3 max-w-md mx-auto">
       
       <!-- Botón Llamar (Borde rojo / estilo claro) -->
@@ -760,6 +760,455 @@
 
     </div>
   </aside>
+
+  <!-- ========================================== -->
+  <!-- 9. CHATBOT IA MIDAS HUELVA (GEMINI API)   -->
+  <!-- ========================================== -->
+  <div id="midas-chatbot-container" class="fixed z-50 bottom-20 sm:bottom-6 right-4 sm:right-6 font-sans">
+    
+    <!-- Floating Teaser Prompt (Tooltip) -->
+    <div id="chat-teaser" class="hidden sm:flex items-center gap-2 mb-3 bg-charcoal text-white text-xs font-semibold px-4 py-2 rounded-2xl shadow-xl border border-gray-700 animate-bounce cursor-pointer transition-opacity" onclick="toggleMidasChat()">
+      <span class="w-2 h-2 rounded-full bg-openGreen animate-ping"></span>
+      <span>¿Dudas con tu avería o precio? <strong>Pregunta a la IA</strong></span>
+      <button class="text-gray-400 hover:text-white ml-1 text-base leading-none" onclick="event.stopPropagation(); document.getElementById('chat-teaser').classList.add('hidden');">&times;</button>
+    </div>
+
+    <!-- Chat Modal Window -->
+    <div id="chat-window" class="hidden opacity-0 scale-95 transition-all duration-300 origin-bottom-right fixed sm:absolute bottom-20 sm:bottom-16 right-3 sm:right-0 w-[calc(100vw-1.5rem)] sm:w-[410px] h-[540px] max-h-[calc(100vh-6.5rem)] sm:max-h-[600px] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+      
+      <!-- Chat Header (Charcoal & Red) -->
+      <div class="bg-charcoal text-white px-4 py-3.5 flex items-center justify-between border-b border-gray-800 select-none shadow-md">
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <div class="w-10 h-10 rounded-full bg-midasRed flex items-center justify-center text-white font-black italic shadow-inner">
+              <span class="material-symbols-outlined text-[22px]">smart_toy</span>
+            </div>
+            <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-openGreen border-2 border-charcoal"></span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-sm leading-tight text-white">Asistente Midas IA</h3>
+              <span class="px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider bg-midasRed text-white rounded">Huelva</span>
+            </div>
+            <p class="text-[11px] text-gray-300 flex items-center gap-1 mt-0.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-openGreen inline-block"></span>
+              <span>Online · Taller Avda. Doctor Rubio</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="flex items-center gap-1 text-gray-300">
+          <button id="chat-reset-btn" title="Reiniciar conversación" class="p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition-colors" aria-label="Reiniciar chat">
+            <span class="material-symbols-outlined text-[19px]">refresh</span>
+          </button>
+          <button id="chat-close-btn" title="Cerrar chat" class="p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition-colors" aria-label="Cerrar chat">
+            <span class="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Messages History Area -->
+      <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/70 text-xs sm:text-sm">
+        
+        <!-- Welcome Message from Assistant -->
+        <div class="flex items-start gap-2.5 message-assistant">
+          <div class="w-7 h-7 rounded-full bg-midasRed text-white flex-shrink-0 flex items-center justify-center text-[13px] font-black shadow-sm mt-0.5">
+            M
+          </div>
+          <div class="bg-white text-charcoal border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[85%] leading-relaxed space-y-2">
+            <p class="font-medium">¡Hola! 👋 Soy el asistente inteligente de <strong>Midas Huelva</strong> en Avda. Doctor Rubio, 6.</p>
+            <p class="text-gray-600">Puedo informarte sobre precios aproximados, servicios, cita previa, garantías o nuestro presupuesto cerrado.</p>
+            <p class="text-[11px] text-gray-400 font-semibold pt-1">Preguntas frecuentes:</p>
+            
+            <!-- Quick Chips -->
+            <div class="flex flex-wrap gap-1.5 pt-0.5" id="quick-chips-container">
+              <button class="quick-chip text-left bg-gray-100 hover:bg-red-50 hover:text-midasRed hover:border-midasRed/40 border border-gray-200 text-charcoal text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all" data-query="¿Cuánto cuesta la revisión oficial?">
+                🔧 Precio Revisión Oficial
+              </button>
+              <button class="quick-chip text-left bg-gray-100 hover:bg-red-50 hover:text-midasRed hover:border-midasRed/40 border border-gray-200 text-charcoal text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all" data-query="¿Qué horario tenéis en Doctor Rubio?">
+                ⏰ Horario del taller
+              </button>
+              <button class="quick-chip text-left bg-gray-100 hover:bg-red-50 hover:text-midasRed hover:border-midasRed/40 border border-gray-200 text-charcoal text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all" data-query="¿Cómo funciona el presupuesto cerrado?">
+                📋 Presupuesto cerrado
+              </button>
+              <button class="quick-chip text-left bg-gray-100 hover:bg-red-50 hover:text-midasRed hover:border-midasRed/40 border border-gray-200 text-charcoal text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all" data-query="¿Tenéis coche de sustitución?">
+                🚗 Coche de sustitución
+              </button>
+              <button class="quick-chip text-left bg-gray-100 hover:bg-red-50 hover:text-midasRed hover:border-midasRed/40 border border-gray-200 text-charcoal text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all" data-query="¿Dónde estáis y cómo contacto?">
+                📍 Dónde estáis
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Typing indicator -->
+      <div id="chat-typing" class="hidden px-4 py-2 bg-gray-50/70 flex items-center gap-2">
+        <div class="w-6 h-6 rounded-full bg-midasRed text-white flex-shrink-0 flex items-center justify-center text-[11px] font-black">
+          M
+        </div>
+        <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-3 py-2 shadow-sm flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-midasRed animate-bounce"></span>
+          <span class="w-2 h-2 rounded-full bg-midasRed animate-bounce" style="animation-delay: 0.15s"></span>
+          <span class="w-2 h-2 rounded-full bg-midasRed animate-bounce" style="animation-delay: 0.3s"></span>
+          <span class="text-[11px] text-gray-500 ml-1 font-medium">Escribiendo...</span>
+        </div>
+      </div>
+
+      <!-- Footer Info & Message Limit Bar -->
+      <div id="chat-limit-notice" class="hidden px-4 py-1.5 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800 font-medium text-center">
+      </div>
+
+      <!-- Input Form -->
+      <div class="p-3 bg-white border-t border-gray-200">
+        <form id="chat-form" class="flex items-center gap-2">
+          <input 
+            type="text" 
+            id="chat-input" 
+            placeholder="Pregunta sobre precios, averías o cita..." 
+            maxlength="250"
+            autocomplete="off"
+            class="flex-1 bg-gray-100 border border-transparent focus:border-midasRed focus:bg-white text-charcoal text-xs sm:text-sm rounded-xl px-3.5 py-2.5 outline-none transition-all placeholder:text-gray-400"
+          />
+          <button 
+            type="submit" 
+            id="chat-send-btn" 
+            title="Enviar mensaje"
+            class="w-10 h-10 rounded-xl bg-midasRed hover:bg-midasRedDark text-white flex items-center justify-center shadow-md active:scale-95 transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+            <span class="material-symbols-outlined text-[20px]">send</span>
+          </button>
+        </form>
+
+        <!-- Direct telephone link footer -->
+        <div class="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
+          <div class="flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px] text-midasRed">call</span>
+            <span>Atención directa:</span>
+            <a href="tel:959863000" class="font-bold text-midasRed hover:underline">959 86 30 00</a>
+          </div>
+          <a href="#pedir-cita" onclick="toggleMidasChat(false)" class="text-charcoal font-semibold hover:text-midasRed transition-colors">Pedir cita &rarr;</a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Floating Trigger Button -->
+    <button 
+      id="chat-toggle-btn"
+      onclick="toggleMidasChat()"
+      aria-label="Abrir asistente de soporte Midas IA"
+      class="group relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-midasRed hover:bg-midasRedDark text-white shadow-2xl flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 border-2 border-white/25 focus:outline-none focus:ring-4 focus:ring-red-300">
+      
+      <!-- Open Icon -->
+      <span id="chat-icon-open" class="material-symbols-outlined text-[28px] sm:text-[32px] transition-transform group-hover:rotate-6">
+        chat
+      </span>
+
+      <!-- Close Icon (Hidden by default) -->
+      <span id="chat-icon-close" class="material-symbols-outlined text-[28px] sm:text-[32px] hidden">
+        close
+      </span>
+
+      <!-- Green Live Badge Dot -->
+      <span class="absolute top-0 right-0 flex h-4 w-4">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-openGreen opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-4 w-4 bg-openGreen border-2 border-white"></span>
+      </span>
+    </button>
+  </div>
+
+  <!-- Chatbot JavaScript Controller -->
+  <script>
+    (function() {
+      const MAX_USER_MESSAGES = 15;
+      const STORAGE_KEY = 'midas_chat_history_v1';
+      const COUNT_KEY = 'midas_chat_count_v1';
+
+      const chatWindow = document.getElementById('chat-window');
+      const chatToggleBtn = document.getElementById('chat-toggle-btn');
+      const chatIconOpen = document.getElementById('chat-icon-open');
+      const chatIconClose = document.getElementById('chat-icon-close');
+      const chatMessages = document.getElementById('chat-messages');
+      const chatForm = document.getElementById('chat-form');
+      const chatInput = document.getElementById('chat-input');
+      const chatSendBtn = document.getElementById('chat-send-btn');
+      const chatTyping = document.getElementById('chat-typing');
+      const chatResetBtn = document.getElementById('chat-reset-btn');
+      const chatCloseBtn = document.getElementById('chat-close-btn');
+      const chatLimitNotice = document.getElementById('chat-limit-notice');
+      const chatTeaser = document.getElementById('chat-teaser');
+
+      let isOpen = false;
+      let isSubmitting = false;
+      let conversation = [];
+      let userMessageCount = 0;
+
+      // Inicializar estado desde sessionStorage
+      function initChat() {
+        try {
+          const savedHistory = sessionStorage.getItem(STORAGE_KEY);
+          const savedCount = sessionStorage.getItem(COUNT_KEY);
+          if (savedHistory) {
+            conversation = JSON.parse(savedHistory);
+          }
+          if (savedCount) {
+            userMessageCount = parseInt(savedCount, 10) || 0;
+          }
+        } catch (e) {
+          conversation = [];
+          userMessageCount = 0;
+        }
+
+        // Renderizar mensajes guardados
+        if (conversation.length > 0) {
+          conversation.forEach(msg => {
+            appendMessageToUI(msg.role, msg.content, false);
+          });
+        }
+        updateLimitNotice();
+      }
+
+      // Alternar visualización del chat
+      window.toggleMidasChat = function(forceState) {
+        if (typeof forceState === 'boolean') {
+          isOpen = forceState;
+        } else {
+          isOpen = !isOpen;
+        }
+
+        if (isOpen) {
+          chatWindow.classList.remove('hidden');
+          setTimeout(() => {
+            chatWindow.classList.remove('opacity-0', 'scale-95');
+          }, 10);
+          chatIconOpen.classList.add('hidden');
+          chatIconClose.classList.remove('hidden');
+          if (chatTeaser) chatTeaser.classList.add('hidden');
+          chatInput.focus();
+          scrollToBottom();
+        } else {
+          chatWindow.classList.add('opacity-0', 'scale-95');
+          setTimeout(() => {
+            chatWindow.classList.add('hidden');
+          }, 250);
+          chatIconOpen.classList.remove('hidden');
+          chatIconClose.classList.add('hidden');
+        }
+      };
+
+      chatCloseBtn.addEventListener('click', () => toggleMidasChat(false));
+
+      // Resetear chat
+      chatResetBtn.addEventListener('click', () => {
+        if (confirm('¿Quieres reiniciar la conversación con el asistente?')) {
+          conversation = [];
+          userMessageCount = 0;
+          sessionStorage.removeItem(STORAGE_KEY);
+          sessionStorage.removeItem(COUNT_KEY);
+          
+          // Mantener sólo el mensaje de bienvenida
+          const welcome = chatMessages.firstElementChild;
+          chatMessages.innerHTML = '';
+          if (welcome) chatMessages.appendChild(welcome);
+          updateLimitNotice();
+          chatInput.disabled = false;
+          chatSendBtn.disabled = false;
+          chatInput.placeholder = 'Pregunta sobre precios, averías o cita...';
+        }
+      });
+
+      // Quick Chips Click Event
+      document.addEventListener('click', function(e) {
+        const chip = e.target.closest('.quick-chip');
+        if (chip) {
+          const query = chip.getAttribute('data-query');
+          if (query) {
+            chatInput.value = query;
+            handleUserSubmit();
+          }
+        }
+      });
+
+      // Formatear texto simple tipo Markdown a HTML seguro
+      function formatMarkdown(text) {
+        if (!text) return '';
+        
+        let html = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+        // Negrita **texto**
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        // Cursiva *texto*
+        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+        // Teléfono 959 86 30 00 con enlace directo
+        html = html.replace(/959[\s.-]?86[\s.-]?30[\s.-]?00/g, '<a href="tel:959863000" class="inline-flex items-center font-bold text-midasRed underline decoration-1 underline-offset-2 hover:opacity-80">959 86 30 00</a>');
+
+        // Enlace #pedir-cita
+        html = html.replace(/#pedir-cita/g, '<a href="#pedir-cita" onclick="toggleMidasChat(false)" class="inline-block font-bold text-midasRed underline">Pedir Cita Online</a>');
+
+        // Listas simples con guiones o asteriscos
+        const lines = html.split('\n');
+        let inList = false;
+        let result = [];
+
+        for (let line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+            if (!inList) {
+              result.push('<ul class="list-disc pl-4 space-y-1 my-1">');
+              inList = true;
+            }
+            result.push('<li>' + trimmed.substring(2) + '</li>');
+          } else {
+            if (inList) {
+              result.push('</ul>');
+              inList = false;
+            }
+            if (trimmed.length > 0) {
+              result.push('<p class="mb-1.5 last:mb-0">' + line + '</p>');
+            }
+          }
+        }
+        if (inList) result.push('</ul>');
+
+        return result.join('');
+      }
+
+      // Añadir mensaje a la interfaz
+      function appendMessageToUI(role, content, isError = false) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = role === 'user' 
+          ? 'flex justify-end message-user' 
+          : 'flex items-start gap-2.5 message-assistant';
+
+        const formattedHtml = formatMarkdown(content);
+
+        if (role === 'user') {
+          msgDiv.innerHTML = `
+            <div class="bg-midasRed text-white rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm max-w-[85%] leading-relaxed break-words font-medium">
+              ${formattedHtml}
+            </div>
+          `;
+        } else {
+          msgDiv.innerHTML = `
+            <div class="w-7 h-7 rounded-full bg-midasRed text-white flex-shrink-0 flex items-center justify-center text-[13px] font-black shadow-sm mt-0.5">
+              M
+            </div>
+            <div class="bg-white text-charcoal border ${isError ? 'border-red-300 bg-red-50/50' : 'border-gray-200'} rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[85%] leading-relaxed break-words">
+              ${formattedHtml}
+            </div>
+          `;
+        }
+
+        chatMessages.appendChild(msgDiv);
+        scrollToBottom();
+      }
+
+      function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function updateLimitNotice() {
+        const remaining = MAX_USER_MESSAGES - userMessageCount;
+        if (remaining <= 0) {
+          chatLimitNotice.classList.remove('hidden');
+          chatLimitNotice.className = 'px-4 py-2 bg-red-50 border-t border-red-200 text-[11px] text-red-700 font-semibold text-center';
+          chatLimitNotice.innerHTML = 'Has alcanzado el límite de preguntas en esta sesión. Llámanos al <a href="tel:959863000" class="underline font-bold">959 86 30 00</a> para ayudarte.';
+          chatInput.disabled = true;
+          chatSendBtn.disabled = true;
+          chatInput.placeholder = 'Límite alcanzado. Llámanos al 959 86 30 00';
+        } else if (remaining <= 4) {
+          chatLimitNotice.classList.remove('hidden');
+          chatLimitNotice.className = 'px-4 py-1.5 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800 font-medium text-center';
+          chatLimitNotice.innerHTML = `Te quedan <strong>${remaining}</strong> mensajes en esta sesión.`;
+        } else {
+          chatLimitNotice.classList.add('hidden');
+        }
+      }
+
+      // Envío de mensaje
+      async function handleUserSubmit() {
+        const text = chatInput.value.trim();
+        if (!text || isSubmitting) return;
+
+        if (userMessageCount >= MAX_USER_MESSAGES) {
+          alert('Has completado el límite de consultas automáticas. Por favor, llámanos directamente al taller: 959 86 30 00.');
+          return;
+        }
+
+        chatInput.value = '';
+        appendMessageToUI('user', text);
+
+        conversation.push({ role: 'user', content: text });
+        userMessageCount++;
+
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(conversation));
+        sessionStorage.setItem(COUNT_KEY, userMessageCount.toString());
+
+        updateLimitNotice();
+
+        // Mostrar typing indicator y deshabilitar botón
+        isSubmitting = true;
+        chatSendBtn.disabled = true;
+        chatTyping.classList.remove('hidden');
+        scrollToBottom();
+
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: conversation
+            })
+          });
+
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok || !data.reply) {
+            const errorMsg = data.error || 'Lo siento, ha ocurrido un problema al procesar tu consulta. Por favor, llámanos al **959 86 30 00** o pide cita online.';
+            appendMessageToUI('assistant', errorMsg, true);
+          } else {
+            const reply = data.reply;
+            conversation.push({ role: 'assistant', content: reply });
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(conversation));
+            appendMessageToUI('assistant', reply, false);
+          }
+        } catch (err) {
+          console.error('Error al contactar con /api/chat:', err);
+          appendMessageToUI('assistant', 'No se ha podido conectar con el taller en este momento. Por favor revisa tu conexión o llámanos al **959 86 30 00**.', true);
+        } finally {
+          isSubmitting = false;
+          chatTyping.classList.add('hidden');
+          if (userMessageCount < MAX_USER_MESSAGES) {
+            chatSendBtn.disabled = false;
+            chatInput.focus();
+          }
+        }
+      }
+
+      chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        handleUserSubmit();
+      });
+
+      // Cerrar al pulsar Escape
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isOpen) {
+          toggleMidasChat(false);
+        }
+      });
+
+      initChat();
+    })();
+  </script>
 
 </body>
 </html>
