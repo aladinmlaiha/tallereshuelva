@@ -1,7 +1,4 @@
-/**
- * Vercel Serverless Function: /api/chat
- * Integración con Gemini API para el chatbot de Midas Huelva.
- */
+
 
 const SYSTEM_INSTRUCTION = `Eres el asistente virtual inteligente y servicial del taller mecánico oficial Midas Huelva, situado en Avda. Doctor Rubio, 6 (Huelva centro).
 
@@ -39,13 +36,12 @@ PAUTAS DE RESPUESTA:
 - Si el cliente pregunta por una avería compleja, un presupuesto exacto no listado o un caso específico de su modelo de coche, explícale que en el taller hacen presupuesto cerrado y personalizado sin compromiso, e invítale a llamar al teléfono 959 86 30 00 o a pedir cita en la web.
 - Si te preguntan algo ajeno a mecánica de coches o a Midas Huelva, indica amablemente que solo atiendes consultas relacionadas con el taller y sus servicios.`;
 
-// Almacenamiento en memoria para limitación básica de peticiones por IP (Rate Limiting)
+// Rate limiting básico por IP
 const ipRequestCounts = new Map();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minuto
-const MAX_REQUESTS_PER_WINDOW = 12; // Máximo 12 mensajes por minuto por IP
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 15;
 
 export default async function handler(req, res) {
-  // Configuración de cabeceras CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -64,7 +60,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // Rate Limiting simple por IP
+  // Rate Limiting
   const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
   const now = Date.now();
   const clientRecord = ipRequestCounts.get(clientIp);
@@ -73,7 +69,7 @@ export default async function handler(req, res) {
     if (now - clientRecord.startTime < RATE_LIMIT_WINDOW_MS) {
       if (clientRecord.count >= MAX_REQUESTS_PER_WINDOW) {
         return res.status(429).json({
-          error: 'Has enviado demasiados mensajes seguidos. Por favor, espera un minuto o llámanos directamente al 959 86 30 00.'
+          error: 'Has enviado varios mensajes seguidos. Por favor, espera un minuto o llámanos directamente al 959 86 30 00.'
         });
       }
       clientRecord.count++;
@@ -84,20 +80,13 @@ export default async function handler(req, res) {
     ipRequestCounts.set(clientIp, { count: 1, startTime: now });
   }
 
-  // Limpieza periódica del Map de IPs (prevenir memory leak)
-  if (ipRequestCounts.size > 1000) {
-    for (const [key, val] of ipRequestCounts.entries()) {
-      if (now - val.startTime > RATE_LIMIT_WINDOW_MS) {
-        ipRequestCounts.delete(key);
-      }
-    }
-  }
+  const rawKey = process.env.GEMINI_API_KEY || '';
+  const apiKey = rawKey.trim().replace(/^["']|["']$/g, '');
 
-  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error('Error: La variable de entorno GEMINI_API_KEY no está configurada.');
+    console.error('Error: La variable GEMINI_API_KEY no está configurada.');
     return res.status(500).json({
-      error: 'El servicio de chatbot no está configurado correctamente en el servidor. Por favor, contacta al taller en el 959 86 30 00.'
+      error: 'La variable de entorno GEMINI_API_KEY no está configurada en Vercel. Por favor, añádela en Settings > Environment Variables y haz Redeploy.'
     });
   }
 
@@ -110,13 +99,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Limitar historial a los últimos 10 mensajes para no saturar tokens
     const recentMessages = messages.slice(-10);
 
-    // Formatear mensajes para la API de Gemini (formato contents: [{ role, parts }])
-    const geminiContents = recentMessages.map(msg => {
+    // Formatear mensajes compatibles con Gemini
+    const geminiContents = recentMessages.map((msg) => {
       const role = msg.role === 'assistant' || msg.role === 'model' ? 'model' : 'user';
-      const text = typeof msg.content === 'string' ? msg.content.trim().slice(0, 1000) : '';
+      let text = typeof msg.content === 'string' ? msg.content.trim().slice(0, 1000) : '';
+      
       return {
         role: role,
         parts: [{ text: text }]
@@ -129,56 +118,50 @@ export default async function handler(req, res) {
       });
     }
 
-    // Modelo gratuito recomendado en Gemini API: gemini-1.5-flash
-    const GEMINI_MODEL = 'gemini-1.5-flash';
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+    // Modelos a probar en orden
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+    let lastError = null;
 
-    const payload = {
-      systemInstruction: {
-        parts: [{ text: SYSTEM_INSTRUCTION }]
-      },
-      contents: geminiContents,
-      generationConfig: {
-        temperature: 0.4,
-        topP: 0.9,
-        maxOutputTokens: 500
-      }
-    };
+    for (const model of modelsToTry) {
+      try {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+        const payload = {
+          system_instruction: {
+            parts: [{ text: SYSTEM_INSTRUCTION }]
+          },
+          contents: geminiContents,
+          generationConfig: {
+            temperature: 0.3,
+            topP: 0.9,
+            maxOutputTokens: 500
+          }
+        };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Error desde Gemini API:', response.status, errorData);
-      
-      if (response.status === 429) {
-        return res.status(429).json({
-          error: 'El servicio está experimentando alta demanda. Llámanos al 959 86 30 00 para atenderte de inmediato.'
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) {
+            return res.status(200).json({ reply: replyText });
+          }
+        }
+
+        console.warn(`Intento con ${model} falló:`, response.status, data);
+        lastError = data.error?.message || `Error ${response.status} con modelo ${model}`;
+      } catch (err) {
+        lastError = err.message;
       }
-
-      return res.status(502).json({
-        error: 'No se pudo conectar con el servicio de asistencia. Por favor, inténtalo de nuevo o llámanos al 959 86 30 00.'
-      });
     }
 
-    const data = await response.json();
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!replyText) {
-      return res.status(500).json({
-        error: 'No se obtuvo respuesta válida del asistente. Llámanos al 959 86 30 00 para ayudarte.'
-      });
-    }
-
-    return res.status(200).json({
-      reply: replyText
+    return res.status(502).json({
+      error: `Error al conectar con Gemini: ${lastError || 'Revisa tu clave GEMINI_API_KEY en Vercel o llámanos al 959 86 30 00'}`
     });
 
   } catch (error) {
