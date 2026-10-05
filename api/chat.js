@@ -128,7 +128,8 @@ export default async function handler(req, res) {
           contents: geminiContents,
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 500
+            maxOutputTokens: 10000
+        
           }
         };
 
