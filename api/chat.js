@@ -39,11 +39,6 @@ PAUTAS DE RESPUESTA:
 - Si el cliente pregunta por una avería compleja, un presupuesto exacto no listado o un caso específico de su modelo de coche, explícale que en el taller hacen presupuesto cerrado y personalizado sin compromiso, e invítale a llamar al teléfono 959 86 30 00 o a pedir cita en la web.
 - Si te preguntan algo ajeno a mecánica de coches o a Midas Huelva, indica amablemente que solo atiendes consultas relacionadas con el taller y sus servicios.`;
 
-// Rate limiting básico por IP
-const ipRequestCounts = new Map();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const MAX_REQUESTS_PER_WINDOW = 15;
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -63,33 +58,12 @@ export default async function handler(req, res) {
     });
   }
 
-  // Rate Limiting
-  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
-  const now = Date.now();
-  const clientRecord = ipRequestCounts.get(clientIp);
-
-  if (clientRecord) {
-    if (now - clientRecord.startTime < RATE_LIMIT_WINDOW_MS) {
-      if (clientRecord.count >= MAX_REQUESTS_PER_WINDOW) {
-        return res.status(429).json({
-          error: 'Has enviado varios mensajes seguidos. Por favor, espera un minuto o llámanos directamente al 959 86 30 00.'
-        });
-      }
-      clientRecord.count++;
-    } else {
-      ipRequestCounts.set(clientIp, { count: 1, startTime: now });
-    }
-  } else {
-    ipRequestCounts.set(clientIp, { count: 1, startTime: now });
-  }
-
   const rawKey = process.env.GEMINI_API_KEY || '';
   const apiKey = rawKey.trim().replace(/^["']|["']$/g, '');
 
   if (!apiKey) {
-    console.error('Error: La variable GEMINI_API_KEY no está configurada.');
     return res.status(500).json({
-      error: 'La variable de entorno GEMINI_API_KEY no está configurada en Vercel. Por favor, añádela en Settings > Environment Variables y haz Redeploy.'
+      error: 'La variable GEMINI_API_KEY no está configurada en Vercel.'
     });
   }
 
@@ -104,11 +78,10 @@ export default async function handler(req, res) {
 
     const recentMessages = messages.slice(-10);
 
-    // Formatear mensajes compatibles con Gemini
+    // Formatear mensajes
     const geminiContents = recentMessages.map((msg) => {
       const role = msg.role === 'assistant' || msg.role === 'model' ? 'model' : 'user';
       let text = typeof msg.content === 'string' ? msg.content.trim().slice(0, 1000) : '';
-      
       return {
         role: role,
         parts: [{ text: text }]
@@ -121,8 +94,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Modelos a probar en orden
-    const modelsToTry = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b'];
+    // Inyectar contexto de sistema directamente en el primer mensaje de usuario para compatibilidad universal
+    if (geminiContents[0].role === 'user') {
+      geminiContents[0].parts[0].text = `[Instrucciones del sistema para el asistente]:\n${SYSTEM_INSTRUCTION}\n\n[Pregunta del cliente]:\n${geminiContents[0].parts[0].text}`;
+    }
+
+    // Probar modelos estándar admitidos en Gemini API
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-pro'];
     let lastError = null;
 
     for (const model of modelsToTry) {
@@ -130,14 +108,10 @@ export default async function handler(req, res) {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
         const payload = {
-          system_instruction: {
-            parts: [{ text: SYSTEM_INSTRUCTION }]
-          },
           contents: geminiContents,
           generationConfig: {
-            temperature: 0.3,
-            topP: 0.9,
-            maxOutputTokens: 500
+            temperature: 0.4,
+            maxOutputTokens: 600
           }
         };
 
@@ -157,20 +131,22 @@ export default async function handler(req, res) {
         }
 
         console.warn(`Intento con ${model} falló:`, response.status, data);
-        lastError = data.error?.message || `Error ${response.status} con modelo ${model}`;
+        if (data.error?.message) {
+          lastError = data.error.message;
+        }
       } catch (err) {
         lastError = err.message;
       }
     }
 
     return res.status(502).json({
-      error: `Error al conectar con Gemini: ${lastError || 'Revisa tu clave GEMINI_API_KEY en Vercel o llámanos al 959 86 30 00'}`
+      error: `Error al conectar con Gemini: ${lastError || 'Consulta no procesada'}`
     });
 
   } catch (error) {
     console.error('Error interno en /api/chat:', error);
     return res.status(500).json({
-      error: 'Ha ocurrido un error inesperado. Por favor llámanos al 959 86 30 00 para consultar tus dudas.'
+      error: 'Ha ocurrido un error inesperado al procesar tu consulta.'
     });
   }
 }
