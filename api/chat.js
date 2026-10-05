@@ -1,4 +1,7 @@
-
+/**
+ * Vercel Serverless Function: /api/chat
+ * Integración con Gemini API para el chatbot de Midas Huelva.
+ */
 
 const SYSTEM_INSTRUCTION = `Eres el asistente virtual inteligente y servicial del taller mecánico oficial Midas Huelva, situado en Avda. Doctor Rubio, 6 (Huelva centro).
 
@@ -171,3 +174,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
+
+ 
