@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     }
 
     // Modelos estáticos ordenados por preferencia (Evitamos peticiones externas innecesarias)
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash'];
     let lastError = null;
 
     for (const model of modelsToTry) {
