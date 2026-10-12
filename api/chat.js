@@ -1,6 +1,6 @@
 /**
  * Vercel Serverless Function: /api/chat
- * Integración dinámica y autoadaptable con Gemini API para Midas Huelva.
+ * Integración dinámica y optimizada con Gemini API para Midas Huelva.
  */
 
 const SYSTEM_INSTRUCTION = `Eres el asistente virtual inteligente y servicial del taller mecánico oficial Midas Huelva, situado en Avda. Doctor Rubio, 6 (Huelva centro).
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   }
 
   const rawKey = process.env.GEMINI_API_KEY || '';
-  const apiKey = rawKey.trim().replace(/^["']|["']$/g, '');
+  const apiKey = rawKey.trim().replace(/^["']|["']\$/g, '');
 
   if (!apiKey) {
     return res.status(500).json({
@@ -72,8 +72,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Petición inválida.' });
     }
 
+    // Tomamos los últimos mensajes relevantes
     const recentMessages = messages.slice(-10);
 
+    // Mapeamos los mensajes al estándar estricto de Gemini (Alternando user y model)
     const geminiContents = recentMessages.map((msg) => {
       const role = msg.role === 'assistant' || msg.role === 'model' ? 'model' : 'user';
       let text = typeof msg.content === 'string' ? msg.content.trim().slice(0, 1000) : '';
@@ -87,49 +89,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El mensaje no contiene texto válido.' });
     }
 
-    // Inyectar contexto en el primer mensaje
-    if (geminiContents[0].role === 'user') {
-      geminiContents[0].parts[0].text = `[Instrucciones del sistema para el asistente]:\n${SYSTEM_INSTRUCTION}\n\n[Pregunta del cliente]:\n${geminiContents[0].parts[0].text}`;
-    }
-
-    // 1. Obtener automáticamente los modelos disponibles para esta clave en Google AI Studio
-    let availableModels = [];
-    try {
-      const listResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      if (listResponse.ok) {
-        const listData = await listResponse.json();
-        availableModels = (listData.models || [])
-          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
-          .map(m => m.name.replace('models/', ''));
-      }
-    } catch (e) {
-      console.warn('No se pudo listar modelos dinámicamente:', e);
-    }
-
-    // Si la lista dinámica no responde, probar fallback
-    if (availableModels.length === 0) {
-      availableModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-pro'];
-    } else {
-      // Priorizar los modelos flash
-      availableModels.sort((a, b) => {
-        if (a.includes('flash') && !b.includes('flash')) return -1;
-        if (!a.includes('flash') && b.includes('flash')) return 1;
-        return 0;
-      });
-    }
-
+    // Modelos estáticos ordenados por preferencia (Evitamos peticiones externas innecesarias)
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let lastError = null;
 
-    for (const model of availableModels) {
+    for (const model of modelsToTry) {
       try {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
         const payload = {
           contents: geminiContents,
+          // Añadimos la instrucción de sistema de forma nativa para mejor rendimiento
+          systemInstruction: {
+            role: 'system',
+            parts: [{ text: SYSTEM_INSTRUCTION }]
+          },
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 10000
-        
+            maxOutputTokens: 1000 // Reducido a un límite lógico para respuestas de chat rápidas
           }
         };
 
@@ -167,4 +144,4 @@ export default async function handler(req, res) {
     });
   }
 }
- 
+
